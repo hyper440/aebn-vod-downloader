@@ -377,7 +377,7 @@ class Downloader:
     def _download_stream(self, stream: MediaStream, segment_range: tuple[int, int]) -> None:
         """Download stream segments in given range using threadpool"""
         # Initialize progress bar
-        segments_to_download = range(segment_range[0], segment_range[1] + 1)
+        segments_to_download = range(segment_range[0], segment_range[1])
 
         task = self.progress.add_task(f"{stream.human_name.capitalize()} download:", total=len(segments_to_download) + 1)
 

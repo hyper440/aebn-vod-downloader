@@ -59,5 +59,13 @@ class Movie:
             target_scene = self.scenes[i]
             target_scene.start_timing = int(scene_el.get("data-time-start"))
             target_scene.end_timing = target_scene.start_timing + int(scene_el.get("data-time-duration"))
-            target_scene.start_segment = math.floor(int(target_scene.start_timing) / segment_duration)
-            target_scene.end_segment = math.ceil(int(target_scene.end_timing) / segment_duration)
+
+            target_scene.start_segment = math.floor(target_scene.start_timing / segment_duration)
+
+            # For end segment, subtract a tiny amount to prevent overlap with next scene
+            end_time_adjusted = target_scene.end_timing - 0.001
+            target_scene.end_segment = math.floor(end_time_adjusted / segment_duration)
+
+            # Ensure we don't get negative segments
+            target_scene.start_segment = max(0, target_scene.start_segment)
+            target_scene.end_segment = max(0, target_scene.end_segment)
