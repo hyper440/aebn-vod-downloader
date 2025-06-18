@@ -138,6 +138,7 @@ class Downloader:
             if not self.no_metadata:
                 self.logger.info("Embedding metadata")
                 utils.add_metadata(output_path, scraped_movie)
+                self.logger.info(f"Successfully embedded metadata in {output_path}")
             self._cleanup()
             return Path(output_path)
 

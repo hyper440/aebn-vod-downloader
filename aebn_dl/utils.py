@@ -157,7 +157,6 @@ def add_metadata(input_path: str | Path, movie: Movie) -> None:
 
         # Replace original file with the temporary output
         os.replace(temp_output, input_path)
-        print(f"Successfully added chapters to {input_path}")
 
     except Exception as e:
         # Clean up temp file if something went wrong
