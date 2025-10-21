@@ -1,21 +1,20 @@
 import datetime
 import email.utils as eut
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
-from pathlib import Path
-import signal
-
 import os
+import signal
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
+from pathlib import Path
+from threading import Lock
 from typing import Literal
 
-from contextlib import nullcontext
 from rich.live import Live
 from rich.progress import (
-    SpinnerColumn,
     MofNCompleteColumn,
     Progress,
+    SpinnerColumn,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -23,10 +22,10 @@ from rich.progress import (
 
 from . import utils
 from .custom_session import CustomSession
+from .exceptions import Forbidden
+from .manifest_parser import Manifest
 from .models import MediaStream
 from .movie_scraper import Movie
-from .manifest_parser import Manifest
-from .exceptions import Forbidden
 
 # Make Ctrl-C work when threads are running
 signal.signal(signal.SIGINT, signal.SIG_DFL)
