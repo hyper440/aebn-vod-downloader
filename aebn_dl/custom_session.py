@@ -1,9 +1,13 @@
 import random
 from time import sleep
 from typing import Literal
-from typing_extensions import Unpack
 
-from curl_cffi import Session, Response
+try:
+    from typing import Unpack
+except ImportError:
+    from typing_extensions import Unpack
+
+from curl_cffi import Response, Session
 from curl_cffi.requests import RequestsError
 from curl_cffi.requests.session import RequestParams
 
@@ -19,7 +23,9 @@ class CustomSession(Session):
         self.initial_retry_delay = initial_retry_delay
         self.backoff_factor = backoff_factor
 
-    def custom_request(self, method: Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"], url: str, *args, **kwargs) -> Response:
+    def custom_request(
+        self, method: Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"], url: str, *args, **kwargs
+    ) -> Response:
         """request wrapper with retries"""
         attempt = 0
         while True:
