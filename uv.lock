@@ -10,6 +10,7 @@ dependencies = [
     { name = "curl-cffi" },
     { name = "lxml" },
     { name = "rich" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
 ]
 
 [package.optional-dependencies]
@@ -23,6 +24,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=5.4.0" },
     { name = "lxml-stubs", marker = "extra == 'dev'" },
     { name = "rich", specifier = ">=13.9.0" },
+    { name = "typing-extensions", marker = "python_full_version < '3.11'", specifier = ">=4.0.0" },
 ]
 provides-extras = ["dev"]
 
