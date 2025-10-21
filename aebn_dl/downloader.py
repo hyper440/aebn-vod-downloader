@@ -149,8 +149,8 @@ class Downloader:
         self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
         self.session.headers["Connection"] = "keep-alive"
         self.session.cookies.update({"ageGated": "", "terms": ""})
-        if self.proxy and use_proxies:
-            self.session.proxies = {"http": self.proxy, "https": self.proxy}
+        if use_proxies:
+            self.session.proxies = {"all": self.proxy}
 
     def _movie_logger_name(self) -> str:
         """Generate logger name from movie url"""
