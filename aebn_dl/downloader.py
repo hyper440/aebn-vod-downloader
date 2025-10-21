@@ -135,7 +135,8 @@ class Downloader:
             self.logger.info(f"Output file name: {output_file_name}")
             self._download_streams(scraped_movie)
             self._process_streams(output_path)
-            if not self.no_metadata:
+            should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
+            if should_embed_metadata:
                 self.logger.info("Embedding metadata")
                 utils.embed_metadata(output_path, scraped_movie)
                 self.logger.info(f"Successfully embedded metadata in {output_path}")
