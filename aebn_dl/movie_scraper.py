@@ -10,7 +10,7 @@ from .models import Scene
 class Movie:
     def __init__(self, url: str, session: CustomSession):
         self.input_url = url
-        self.session = session
+        self._session = session
         self.url_content_type: str | None = None
         self.movie_id: str | None = None
         self.studio_name: str | None = None
@@ -25,7 +25,7 @@ class Movie:
 
     def _scrape_info(self):
         """Scrape movie metadata from aebn.com"""
-        content = html.fromstring(self.session.get(self.input_url).content)
+        content = html.fromstring(self._session.get(self.input_url).content)
         self.url_content_type = self.input_url.split("/")[3]
         self.movie_id = self.input_url.split("/")[5]
         self.studio_name = self._extract_studio_name(content)
@@ -34,10 +34,10 @@ class Movie:
         self.total_duration_seconds = utils.duration_to_seconds(total_duration_string)
         self.studio_name = utils.remove_chars(self.studio_name)
         self.title = utils.remove_chars(self.title)
-        self.performers = content.xpath('//section[@id="dtsPanelStarsDetailMovie"]//a/@title')
+        self.performers = content.xpath('//section[contains(@class, "dts-section-page-detail-info-movie")]//div[@class="dts-detail-movie-stars"]//@title')
         scene_elements = content.xpath('//section[@id[starts-with(., "scene")]]')
         for scene_element in scene_elements:
-            scene_performers = scene_element.xpath('.//li[@class="dts-scene-strip-stars"]//a/text()')
+            scene_performers = scene_element.xpath('.//div[@class="dts-detail-movie-stars"]//@title')
             scene = Scene(performers=scene_performers)
             self.scenes.append(scene)
         cover_front = content.xpath('//*[@class="dts-movie-boxcover-front"]//img/@src')[0].strip()
@@ -53,7 +53,7 @@ class Movie:
 
     def calculate_scenes_boundaries(self, segment_duration: float):
         """Calculate scene segment boundaries with data from m.aebn.net"""
-        response = self.session.get(f"https://m.aebn.net/movie/{self.movie_id}")
+        response = self._session.get(f"https://m.aebn.net/movie/{self.movie_id}")
         html_tree = html.fromstring(response.content)
         scene_elems = html_tree.xpath('//div[@class="scroller"]')
         for i, scene_el in enumerate(scene_elems):
