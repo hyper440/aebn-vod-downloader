@@ -15,6 +15,7 @@ from rich.progress import (
     MofNCompleteColumn,
     Progress,
     SpinnerColumn,
+    TaskProgressColumn,
     TextColumn,
     TimeElapsedColumn,
     TimeRemainingColumn,
@@ -114,6 +115,7 @@ class Downloader:
             SpinnerColumn(),
             TextColumn("{task.description}"),
             MofNCompleteColumn(),
+            TaskProgressColumn(),
             TimeElapsedColumn(),
             TimeRemainingColumn(),
         )
