@@ -10,7 +10,9 @@
 ```
 pip install https://github.com/estellaarrieta/aebn-vod-downloader/archive/refs/heads/main.zip -U
 ```
+
 Or
+
 ```
 pip install git+https://github.com/estellaarrieta/aebn-vod-downloader -U
 ```
@@ -30,6 +32,7 @@ To download scene 2 in 720p resolution
 |       | `URL`                   | URL of the movie or list.txt                                                                                                                                                                                                                                       |
 | `-o`  | `--output_dir`          | Specify the output directory                                                                                                                                                                                                                                       |
 | `-w`  | `--work_dir`            | Specify the work diretory to store downloaded temporary segments in                                                                                                                                                                                                |
+| `-i`  | `--info`          | Print full movie and segment info without downloading                                                                                   |
 | `-r`  | `--resolution`          | Desired video resolution by pixel height. If not found, the nearest lower resolution will be used. Use 0 to select the lowest available resolution. (default: highest available)                                                                                   |
 | `-f`  | `--force-resolution`    | If the target resolution not available, exit with an error                                                                                                                                                                                                         |
 | `-n`  | `--names`               | Include performer names in the output filename                                                                                                                                                                                                                     |

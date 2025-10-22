@@ -1,21 +1,35 @@
 import datetime
 import email.utils as eut
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
-
 import os
+import signal
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import nullcontext
+from pathlib import Path
+from threading import Lock
 from typing import Literal
 
-from tqdm.auto import tqdm
+from rich.live import Live
+from rich.progress import (
+    MofNCompleteColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from . import utils
 from .custom_session import CustomSession
+from .exceptions import Forbidden
+from .manifest_parser import Manifest
 from .models import MediaStream
 from .movie_scraper import Movie
-from .manifest_parser import Manifest
-from .exceptions import Forbidden
+
+# Make Ctrl-C work when threads are running
+signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
 class Downloader:
@@ -41,6 +55,7 @@ class Downloader:
         no_metadata: bool = False,
         log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO",
         keep_logs: bool = False,
+        show_progress: bool = True,
     ):
         """
         Args:
@@ -92,24 +107,64 @@ class Downloader:
         self.manifest: Manifest | None = None
         self.session: CustomSession | None = None
         self.manifest_lock = Lock()
+        self.show_progress = show_progress
+        self.progress = self._init_progress()
 
-    def run(self) -> None:
+    def _init_progress(self) -> Progress:
+        return Progress(
+            SpinnerColumn(),
+            TextColumn("{task.description}"),
+            MofNCompleteColumn(),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        )
+
+    def run(self) -> Path:
         """Executes the movie download process."""
+        context = (self.show_progress and Live(self.progress)) or nullcontext()
+        with context:
+            self._initialize_download()
+            scraped_movie = self._scrape_movie_info()
+            self._process_manifest(scraped_movie)
+            output_file_name = self._generate_output_name(scraped_movie)
+            self._create_dirs(scraped_movie.movie_id)
+            self._set_stream_paths()
+            if self.download_covers:
+                self._download_movie_covers(scraped_movie)
+            output_path = os.path.join(self.output_dir, output_file_name)
+            self.logger.info(f"Output file name: {output_file_name}")
+            self._download_streams(scraped_movie)
+            self._process_streams(output_path)
+            should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
+            if should_embed_metadata:
+                self.logger.info("Embedding metadata")
+                utils.embed_metadata(output_path, scraped_movie)
+                self.logger.info(f"Successfully embedded metadata in {output_path}")
+            self._cleanup()
+            return Path(output_path)
+
+    def print_info(self):
+        """Print detailed movie info and scene segment boundaries."""
         self._initialize_download()
-        scraped_movie = self._scrape_movie_info()
-        self._process_manifest(scraped_movie)
-        output_file_name = self._generate_output_name(scraped_movie)
-        self._create_dirs(scraped_movie.movie_id)
-        self._set_stream_paths()
-        if self.download_covers:
-            self._download_movie_covers(scraped_movie)
-        output_path = os.path.join(self.output_dir, output_file_name)
-        self.logger.info(f"Output file name: {output_file_name}")
-        self._download_streams(scraped_movie)
-        self._process_streams(output_path)
-        if not self.no_metadata:
-            utils.add_metadata(output_path, scraped_movie)
-        self._cleanup()
+        movie = self._scrape_movie_info()
+        self._process_manifest(movie)
+
+        print(f"\n{movie.studio_name} - {movie.title}")
+        print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
+        print(f"Available resolutions: {self.manifest.avaliable_resulutions}")
+        print(f"Performers: {', '.join(movie.performers) if movie.performers else 'N/A'}\n")
+
+        print("Scenes and Segment Boundaries:")
+        print("---------------------------------")
+        for i, scene in enumerate(movie.scenes, 1):
+            performers = ", ".join(scene.performers) if scene.performers else "N/A"
+            print(f"Scene {i}")
+            print(f"Start time: {scene.start_timing}s")
+            print(f"End time:   {scene.end_timing}s")
+            print(f"Segments:   {scene.start_segment} - {scene.end_segment}")
+            print(f"Performers: {performers}")
+            print("──────────────────────────────────────────────")
 
     def _init_new_session(self, use_proxies: bool = True) -> None:
         """Init new curl_cffi session"""
@@ -118,8 +173,8 @@ class Downloader:
         self.session.headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
         self.session.headers["Connection"] = "keep-alive"
         self.session.cookies.update({"ageGated": "", "terms": ""})
-        if self.proxy and use_proxies:
-            self.session.proxies = {"http": self.proxy, "https": self.proxy}
+        if use_proxies:
+            self.session.proxies = {"all": self.proxy}
 
     def _movie_logger_name(self) -> str:
         """Generate logger name from movie url"""
@@ -189,12 +244,10 @@ class Downloader:
         """Concat stream segments into a single file"""
         if os.path.exists(stream.path):
             os.remove(stream.path)
-        utils.concat_segments(
+        self._concat_segments(
             files=stream.downloaded_segments,
             output_path=stream.path,
-            tqdm_desc=f"{stream.human_name} segments",
-            aggressive_cleaning=self.aggressive_segment_cleaning,
-            silent=self.is_silent,
+            desc=f"{stream.human_name} segments",
         )
 
     def _concat_streams(self) -> None:
@@ -347,14 +400,16 @@ class Downloader:
 
     def _download_stream(self, stream: MediaStream, segment_range: tuple[int, int]) -> None:
         """Download stream segments in given range using threadpool"""
+        # Initialize progress bar
+        segments_to_download = range(segment_range[0], segment_range[1])
+
+        task = self.progress.add_task(f"{stream.human_name.capitalize()} download:", total=len(segments_to_download))
+
         self.logger.debug(f"Downloading {stream.human_name} stream ID: {stream.stream_id}")
 
         # Download init segment (single thread)
         self._download_segment(stream, segment_number=None)
-
-        segments_to_download = range(segment_range[0], segment_range[1] + 1)
-        download_bar = tqdm(total=len(segments_to_download) + 1, desc=stream.human_name.capitalize() + " download", disable=self.is_silent)
-        download_bar.update()  # increment by 1 for init segment
+        self.progress.update(task, advance=1)
 
         def download_task(segment_num: int, max_retries: int = 30) -> int | None:
             retries = 0
@@ -388,12 +443,12 @@ class Downloader:
                 try:
                     result = future.result()
                     if result is not None:
-                        download_bar.update()
+                        self.progress.update(task, advance=1)
                 except Exception as e:
                     self.logger.error(f"Unexpected error downloading segment {futures[future]}: {str(e)}")
                     continue
 
-        download_bar.close()
+        self.progress.update(task, visible=False)
 
     def _download_segment(self, stream: MediaStream, segment_number: int | None = None) -> None:
         """Download and save stream segment"""
@@ -424,3 +479,18 @@ class Downloader:
             raise Forbidden(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
         else:
             raise RuntimeError(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
+
+    def _concat_segments(self, files: list[str], output_path: str, desc: str):
+        """Concat segments into a single file"""
+        _files = [files[0], *sorted(files[1:], key=utils.natural_sort_key)]
+        task = self.progress.add_task(description=f"Merging {desc}", total=len(_files))
+        with open(output_path, "wb") as f:
+            for segment_file_path in _files:
+                with open(segment_file_path, "rb") as segment_file:
+                    content = segment_file.read()
+                    segment_file.close()
+                    f.write(content)
+                    self.progress.update(task, advance=1)
+                if self.aggressive_segment_cleaning:
+                    os.remove(segment_file_path)
+        self.progress.update(task, visible=False)

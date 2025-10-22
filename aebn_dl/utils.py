@@ -6,8 +6,6 @@ import os
 import re
 import sys
 
-from tqdm import tqdm
-
 from .movie_scraper import Movie
 
 from .exceptions import FFmpegError
@@ -24,6 +22,7 @@ def remove_chars(text: str) -> str:
 def new_logger(name: str, log_level: str) -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)  # Set the logger level to the lowest (DEBUG)
+    logger.propagate = False
 
     formatter = logging.Formatter("%(asctime)s|%(levelname)s|%(message)s", datefmt="%H:%M:%S")
 
@@ -65,12 +64,9 @@ def duration_to_seconds(duration: str) -> int:
     return total_seconds
 
 
-def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str, silent: bool = False) -> None:
+def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str) -> None:
     """Mux two media streams with ffmpeg"""
-    cmd = f'ffmpeg -i "{stream_path_1}" -i "{stream_path_2}" -y -c copy "{output_path}"'
-
-    if silent:
-        cmd += " -loglevel warning"
+    cmd = f'ffmpeg -i "{stream_path_1}" -i "{stream_path_2}" -y -c copy "{output_path}"  -loglevel warning'
 
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
 
@@ -80,22 +76,6 @@ def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str,
 
 def natural_sort_key(s):
     return [int(text) if text.isdigit() else text.lower() for text in re.split(r"(\d+)", s)]
-
-
-def concat_segments(files: list[str], output_path: str, tqdm_desc: str, aggressive_cleaning: bool, silent: bool = False):
-    """Concat segments into a single file"""
-    _files = [files[0], *sorted(files[1:], key=natural_sort_key)]
-    concat_progress = tqdm(files, desc=f"Joining {tqdm_desc}", disable=silent)
-    with open(output_path, "wb") as f:
-        for segment_file_path in _files:
-            with open(segment_file_path, "rb") as segment_file:
-                content = segment_file.read()
-                segment_file.close()
-                f.write(content)
-                concat_progress.update()
-            if aggressive_cleaning:
-                os.remove(segment_file_path)
-    concat_progress.close()
 
 
 def is_valid_media(media_bytes: bytes) -> bool:
@@ -120,7 +100,7 @@ def ffmpeg_check() -> None:
         raise FileNotFoundError("ffmpeg not found! Please add it to PATH.")
 
 
-def add_metadata(input_path: str | Path, movie: Movie) -> None:
+def embed_metadata(input_path: str | Path, movie: Movie) -> None:
     """
     Add title and chapter markers to a video file using ffmpeg based on Movie object.
     Overwrites the input file.
@@ -128,6 +108,7 @@ def add_metadata(input_path: str | Path, movie: Movie) -> None:
     Args:
         input_path: Path to the input video file (will be overwritten)
         movie: Movie object containing movie metadata
+        silent: Hide ffmpeg output
     """
     input_path = Path(input_path)
 
@@ -161,18 +142,19 @@ def add_metadata(input_path: str | Path, movie: Movie) -> None:
             "copy",  # Stream copy to avoid re-encoding
             "-y",  # Overwrite output if exists
             str(temp_output),
+            "-loglevel",
+            "warning",
         ]
 
         # Execute with metadata piped in
-        process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
-        process.communicate(input=metadata_content.encode("utf-8"))
+        with subprocess.Popen(cmd, stdin=subprocess.PIPE) as p:
+            p.communicate(input=metadata_content.encode("utf-8"))
 
-        if process.returncode != 0:
-            raise subprocess.CalledProcessError(process.returncode, cmd)
+            if p.returncode != 0:
+                raise subprocess.CalledProcessError(p.returncode, cmd)
 
         # Replace original file with the temporary output
         os.replace(temp_output, input_path)
-        print(f"Successfully added chapters to {input_path}")
 
     except Exception as e:
         # Clean up temp file if something went wrong
