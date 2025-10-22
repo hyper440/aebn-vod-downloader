@@ -379,7 +379,7 @@ class Downloader:
         # Initialize progress bar
         segments_to_download = range(segment_range[0], segment_range[1])
 
-        task = self.progress.add_task(f"{stream.human_name.capitalize()} download:", total=len(segments_to_download) + 1)
+        task = self.progress.add_task(f"{stream.human_name.capitalize()} download:", total=len(segments_to_download))
 
         self.logger.debug(f"Downloading {stream.human_name} stream ID: {stream.stream_id}")
 
