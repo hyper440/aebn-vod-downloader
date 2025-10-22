@@ -46,7 +46,7 @@ class Movie:
         self.cover_url_back = "https:" + cover_back.split("?")[0]
 
     def _extract_studio_name(self, content) -> str:
-        studio_names = content.xpath('//*[@class="dts-studio-name-wrapper"]/a/text()')
+        studio_names = content.xpath('//*[@class="section-detail-list-item-studio"]/a/text()')
         if len(studio_names) > 0:
             return studio_names[0].replace(",", "").strip()
         return ""
