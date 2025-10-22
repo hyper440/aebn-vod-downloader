@@ -1,9 +1,10 @@
 import math
+
 from lxml import html
 
 from . import utils
-from .models import Scene
 from .custom_session import CustomSession
+from .models import Scene
 
 
 class Movie:
