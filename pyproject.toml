@@ -20,4 +20,4 @@ dev = ["lxml-stubs"]
 aebndl = "aebn_dl.cli:main"
 
 [tool.ruff]
-line-length = 150
+line-length = 200
