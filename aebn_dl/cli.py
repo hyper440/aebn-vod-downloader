@@ -69,7 +69,12 @@ def main():
     parser.add_argument("url", help="URL of the movie or list.txt")
     parser.add_argument("-o", "--output_dir", type=str, help="Specify the output directory")
     parser.add_argument("-w", "--work_dir", type=str, help="Specify the work diretory to store downloaded temporary segments in")
-    parser.add_argument("-r", "--resolution", type=int, help="Desired video resolution by pixel height. If not found, the nearest lower resolution will be used. Use 0 to select the lowest available resolution. (default: highest available)")
+    parser.add_argument(
+        "-r",
+        "--resolution",
+        type=int,
+        help="Desired video resolution by pixel height. If not found, the nearest lower resolution will be used. Use 0 to select the lowest available resolution. (default: highest available)",
+    )
     parser.add_argument("-f", "--force-resolution", action="store_true", help="If the target resolution not available, exit with an error")
     parser.add_argument("-n", "--names", action="store_true", help="Include performer names in the output filename")
     parser.add_argument("-nm", "--no-metadata", action="store_true", help="Disable adding title and chapter markers to the output video")
@@ -93,8 +98,28 @@ def main():
         "in case of muxing error you would have to download it all again",
     )
     parser.add_argument("-t", "--threads", type=int, default=5, help="Threads for concurrent downloads (default=5)")
-    parser.add_argument("-l", "--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="INFO", help="Set the logging level (default: INFO) Any level above INFO would also disable progress bars")
+    parser.add_argument(
+        "-l",
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Set the logging level (default: INFO) Any level above INFO would also disable progress bars",
+    )
+    parser.add_argument("-i ", "--info", action="store_true", help="Print full movie and segment info without downloading")
+
     args = parser.parse_args()
+
+    if args.info:
+        dl = Downloader(
+            url=args.url,
+            target_height=args.resolution,
+            proxy=args.proxy,
+            proxy_metadata_only=args.proxy_metadata,
+            log_level=args.log_level,
+            show_progress=False,
+        )
+        dl.print_info()
+        return
 
     download_movie(args)
 

@@ -142,6 +142,28 @@ class Downloader:
             self._cleanup()
             return Path(output_path)
 
+    def print_info(self):
+        """Print detailed movie info and scene segment boundaries."""
+        self._initialize_download()
+        movie = self._scrape_movie_info()
+        self._process_manifest(movie)
+
+        print(f"\n{movie.studio_name} - {movie.title}")
+        print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
+        print(f"Available resolutions: {self.manifest.avaliable_resulutions}")
+        print(f"Performers: {', '.join(movie.performers) if movie.performers else 'N/A'}\n")
+
+        print("Scenes and Segment Boundaries:")
+        print("---------------------------------")
+        for i, scene in enumerate(movie.scenes, 1):
+            performers = ", ".join(scene.performers) if scene.performers else "N/A"
+            print(f"Scene {i}")
+            print(f"Start time: {scene.start_timing}s")
+            print(f"End time:   {scene.end_timing}s")
+            print(f"Segments:   {scene.start_segment} - {scene.end_segment}")
+            print(f"Performers: {performers}")
+            print("──────────────────────────────────────────────")
+
     def _init_new_session(self, use_proxies: bool = True) -> None:
         """Init new curl_cffi session"""
         self.session = CustomSession(impersonate="chrome")
