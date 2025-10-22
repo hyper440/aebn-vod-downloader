@@ -7,7 +7,7 @@ packages = ["aebn_dl"]
 
 [project]
 name = "aebndl"
-version = "0.7.1"
+version = "0.8.0"
 description = "aebn downloader"
 readme = "README.md"
 requires-python = ">=3.10"
