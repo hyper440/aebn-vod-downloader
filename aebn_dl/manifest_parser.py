@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import math
+
 import lxml.etree as ET
 
 from . import utils
@@ -48,7 +51,7 @@ class Manifest:
             # other resolution
             stream_id, height = next((sublist for sublist in reversed(video_streams) if sublist[1] <= self.target_height), None)
             if self.force_resolution and height != self.target_height:
-                raise RuntimeError(f"Target video resolution height {self.target_height} not found")
+                raise RuntimeError("Target video resolution height {} not found".format(self.target_height))
             self.video_stream.stream_id = stream_id
             self.video_stream.height = height
 
@@ -67,13 +70,13 @@ class Manifest:
     def _find_best_good_audio_stream(self, video_streams: list[tuple[str, int]]) -> str:
         """Find a valid HQ audio stream with ffmpeg, as they can be corrupted"""
         for stream_id, _ in reversed(video_streams):
-            init_segment_name = f"ai_{stream_id}"
-            init_segment_url = f"{self.base_stream_url}/{init_segment_name}.mp4d"
+            init_segment_name = "ai_{}".format(stream_id)
+            init_segment_url = "{}/{}.mp4d".format(self.base_stream_url, init_segment_name)
             init_segment_bytes = self.session.get(init_segment_url).content
             # grab audio segment from the middle of the stream
             data_segment_number = int(self.total_number_of_data_segments / 2)
-            data_segment_name = f"a_{stream_id}_{data_segment_number}"
-            data_segment_url = f"{self.base_stream_url}/{data_segment_name}.mp4d"
+            data_segment_name = "a_{}_{}".format(stream_id, data_segment_number)
+            data_segment_url = "{}/{}.mp4d".format(self.base_stream_url, data_segment_name)
             data_segment_bytes = self.session.get(data_segment_url).content
             if utils.is_valid_media(init_segment_bytes + data_segment_bytes):
                 return stream_id
@@ -91,8 +94,8 @@ class Manifest:
         movie_id = self.input_url.split("/")[5]
         headers = {}
         headers["content-type"] = "application/x-www-form-urlencoded"
-        data = f"movieId={movie_id}&isPreview=true&format=DASH"
-        url = f"https://{url_content_type}.aebn.com/{url_content_type}/deliver"
+        data = "movieId={}&isPreview=true&format=DASH".format(movie_id)
+        url = "https://{}.aebn.com/{}/deliver".format(url_content_type, url_content_type)
         content = self.session.post(url, headers=headers, data=data).json()
         return content["url"]
 

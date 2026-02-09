@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import math
 
 from lxml import html
@@ -25,7 +27,13 @@ class Movie:
 
     def _scrape_info(self):
         """Scrape movie metadata from aebn.com"""
-        content = html.fromstring(self._session.get(self.input_url).content)
+        response = self._session.get(self.input_url)
+        content = html.fromstring(response.content)
+
+        # Check for age verification page (Yoti)
+        if "dts-yoti-verification" in response.text or "Age Verification Required" in response.text:
+            raise RuntimeError("Age verification (Yoti) required. Your IP appears to be from a US state that requires age verification. Use a proxy from a different location with -p/--proxy option.")
+
         self.url_content_type = self.input_url.split("/")[3]
         self.movie_id = self.input_url.split("/")[5]
         self.studio_name = self._extract_studio_name(content)
@@ -53,7 +61,7 @@ class Movie:
 
     def calculate_scenes_boundaries(self, segment_duration: float):
         """Calculate scene segment boundaries with data from m.aebn.net"""
-        response = self._session.get(f"https://m.aebn.net/movie/{self.movie_id}")
+        response = self._session.get("https://m.aebn.net/movie/{}".format(self.movie_id))
         html_tree = html.fromstring(response.content)
         scene_elems = html_tree.xpath('//div[@class="scroller"]')
         for i, scene_el in enumerate(scene_elems):

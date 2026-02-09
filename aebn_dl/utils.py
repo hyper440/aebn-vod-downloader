@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import subprocess
 import shutil
@@ -34,7 +36,7 @@ def new_logger(name: str, log_level: str) -> logging.Logger:
     logger.addHandler(console_handler)
 
     # File handler with DEBUG level
-    file_handler = logging.FileHandler(f"{name}.log")
+    file_handler = logging.FileHandler("{}.log".format(name))
     file_handler.setLevel(logging.DEBUG)
     file_handler.set_name("file_handler")
     file_handler.setFormatter(formatter)
@@ -66,7 +68,7 @@ def duration_to_seconds(duration: str) -> int:
 
 def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str) -> None:
     """Mux two media streams with ffmpeg"""
-    cmd = f'ffmpeg -i "{stream_path_1}" -i "{stream_path_2}" -y -c copy "{output_path}"  -loglevel warning'
+    cmd = 'ffmpeg -i "{}" -i "{}" -y -c copy "{}"  -loglevel warning'.format(stream_path_1, stream_path_2, output_path)
 
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
 
@@ -114,17 +116,17 @@ def embed_metadata(input_path: str | Path, movie: Movie) -> None:
 
     # Build metadata content
     metadata_content = ";FFMETADATA1\n\n"
-    metadata_content += f"title={movie.title}\n\n"
+    metadata_content += "title={}\n\n".format(movie.title)
     for i, scene in enumerate(movie.scenes):
         # Convert timing to milliseconds
         start_time_ms = scene.start_timing * 1000
         end_time_ms = scene.end_timing * 1000
 
         # Add chapter metadata
-        metadata_content += f"[CHAPTER]\nTIMEBASE=1/1000\nSTART={start_time_ms}\nEND={end_time_ms}\ntitle=Scene {i + 1}: {', '.join(scene.performers)}\n\n"
+        metadata_content += "[CHAPTER]\nTIMEBASE=1/1000\nSTART={}\nEND={}\ntitle=Scene {}: {}\n\n".format(start_time_ms, end_time_ms, i + 1, ", ".join(scene.performers))
 
-    # Create temporary output path
-    temp_output = input_path.with_stem(f"{input_path.stem}_temp_chaptered")
+    # Create temporary output path (replaces Path.with_stem which requires Python 3.9+)
+    temp_output = input_path.with_name("{}_temp_chaptered{}".format(input_path.stem, input_path.suffix))
 
     try:
         # Run ffmpeg with metadata piped via stdin
