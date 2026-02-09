@@ -1,20 +1,22 @@
 # aebn-vod-downloader
 
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/hyper440/aebn-vod-downloader/blob/main/colab.ipynb)
+
 ## Dependencies
 
-- Python 3.10 or higher
-- FFmpeg in system PATH. Recommended Version > 5
+- Python 3.8 or higher (supports Windows 7)
+- FFmpeg in system PATH. On Windows 7, use the **essentials** build from [gyan.dev](https://www.gyan.dev/ffmpeg/builds/) (the full build requires Windows 10+)
 
 ## Installation
 
 ```
-pip install https://github.com/estellaarrieta/aebn-vod-downloader/archive/refs/heads/main.zip -U
+pip install https://github.com/hyper440/aebn-vod-downloader/archive/refs/heads/main.zip -U
 ```
 
 Or
 
 ```
-pip install git+https://github.com/estellaarrieta/aebn-vod-downloader -U
+pip install git+https://github.com/hyper440/aebn-vod-downloader -U
 ```
 
 ### Example Usage With Arguments
@@ -38,6 +40,7 @@ To download scene 2 in 720p resolution
 | `-n`  | `--names`               | Include performer names in the output filename                                                                                                                                                                                                                     |
 | `-nm`  | `--no-metadata`               | Disable adding title and chapter markers to the output video                                                                                                                                                                                                                     |
 | `-s`  | `--scene`               | Download a single scene using the relevant scene number on AEBN                                                                                                                                                                                                    |
+|       | `--split-scenes`        | Download and save each scene as a separate file                                                                                                                                                                                                                    |
 | `-ss` | `--start-segment`       | Specify the start segment                                                                                                                                                                                                                                          |
 | `-es` | `--end-segment`         | Specify the end segment                                                                                                                                                                                                                                            |
 | `-p`  | `--proxy`               | Proxy to use (format: protocol://username:password@ip:port)                                                                                                                                                                                                        |

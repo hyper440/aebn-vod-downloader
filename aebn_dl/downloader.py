@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import email.utils as eut
 import logging
@@ -47,7 +49,7 @@ class Downloader:
         proxy_metadata_only: bool = False,
         download_covers: bool = False,
         overwrite_existing_files: bool = False,
-        target_stream: Literal["audio", "video", None] = None,
+        target_stream: Literal["audio", "video"] | None = None,
         keep_segments_after_download: bool = False,
         aggressive_segment_cleaning: bool = False,
         force_resolution: bool = False,
@@ -56,6 +58,7 @@ class Downloader:
         log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO",
         keep_logs: bool = False,
         show_progress: bool = True,
+        split_scenes: bool = False,
     ):
         """
         Args:
@@ -79,6 +82,7 @@ class Downloader:
             include_performer_names: If True, include performer names in the output file name. Defaults to False.
             no_metadata: Disable adding title and chapter markers to the output video. Defaults to False.
             keep_logs: If True, keep log files after processing. Defaults to False.
+            split_scenes: If True, download and save each scene as a separate file. Defaults to False.
         """
 
         self.input_url = url
@@ -101,6 +105,7 @@ class Downloader:
         self.proxy = proxy
         self.threads = threads
         self.proxy_metadata_only = proxy_metadata_only
+        self.split_scenes = split_scenes
         self.logger = utils.new_logger(name=self._movie_logger_name(), log_level=log_level)
         self.is_silent = self.logger.getEffectiveLevel() > logging.INFO
         self.movie_work_dir: str | None = None
@@ -120,29 +125,39 @@ class Downloader:
             TimeRemainingColumn(),
         )
 
-    def run(self) -> Path:
+    def run(self) -> Path | list[Path]:
         """Executes the movie download process."""
         context = (self.show_progress and Live(self.progress)) or nullcontext()
         with context:
             self._initialize_download()
             scraped_movie = self._scrape_movie_info()
             self._process_manifest(scraped_movie)
-            output_file_name = self._generate_output_name(scraped_movie)
             self._create_dirs(scraped_movie.movie_id)
             self._set_stream_paths()
             if self.download_covers:
                 self._download_movie_covers(scraped_movie)
-            output_path = os.path.join(self.output_dir, output_file_name)
-            self.logger.info(f"Output file name: {output_file_name}")
+
+            # Download all segments
             self._download_streams(scraped_movie)
-            self._process_streams(output_path)
-            should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
-            if should_embed_metadata:
-                self.logger.info("Embedding metadata")
-                utils.embed_metadata(output_path, scraped_movie)
-                self.logger.info(f"Successfully embedded metadata in {output_path}")
-            self._cleanup()
-            return Path(output_path)
+
+            if self.split_scenes:
+                # Process each scene separately
+                output_paths = self._process_split_scenes(scraped_movie)
+                self._cleanup()
+                return output_paths
+            else:
+                # Normal single file processing
+                output_file_name = self._generate_output_name(scraped_movie)
+                output_path = os.path.join(self.output_dir, output_file_name)
+                self.logger.info("Output file name: {}".format(output_file_name))
+                self._process_streams(output_path)
+                should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
+                if should_embed_metadata:
+                    self.logger.info("Embedding metadata")
+                    utils.embed_metadata(output_path, scraped_movie)
+                    self.logger.info("Successfully embedded metadata in {}".format(output_path))
+                self._cleanup()
+                return Path(output_path)
 
     def print_info(self):
         """Print detailed movie info and scene segment boundaries."""
@@ -150,20 +165,20 @@ class Downloader:
         movie = self._scrape_movie_info()
         self._process_manifest(movie)
 
-        print(f"\n{movie.studio_name} - {movie.title}")
-        print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
-        print(f"Available resolutions: {self.manifest.avaliable_resulutions}")
-        print(f"Performers: {', '.join(movie.performers) if movie.performers else 'N/A'}\n")
+        print("\n{} - {}".format(movie.studio_name, movie.title))
+        print("Duration: {} min ({}s)".format(movie.total_duration_seconds // 60, movie.total_duration_seconds))
+        print("Available resolutions: {}".format(self.manifest.avaliable_resulutions))
+        print("Performers: {}\n".format(", ".join(movie.performers) if movie.performers else "N/A"))
 
         print("Scenes and Segment Boundaries:")
         print("---------------------------------")
         for i, scene in enumerate(movie.scenes, 1):
             performers = ", ".join(scene.performers) if scene.performers else "N/A"
-            print(f"Scene {i}")
-            print(f"Start time: {scene.start_timing}s")
-            print(f"End time:   {scene.end_timing}s")
-            print(f"Segments:   {scene.start_segment} - {scene.end_segment}")
-            print(f"Performers: {performers}")
+            print("Scene {}".format(i))
+            print("Start time: {}s".format(scene.start_timing))
+            print("End time:   {}s".format(scene.end_timing))
+            print("Segments:   {} - {}".format(scene.start_segment, scene.end_segment))
+            print("Performers: {}".format(performers))
             print("──────────────────────────────────────────────")
 
     def _init_new_session(self, use_proxies: bool = True) -> None:
@@ -180,7 +195,7 @@ class Downloader:
         """Generate logger name from movie url"""
         name = self.input_url.split("/")[5]
         if self.scene_n:
-            return f"{name}_{self.scene_n}"
+            return "{}_{}".format(name, self.scene_n)
         return name
 
     def _get_handler_level(self, handler_name: str) -> int | None:
@@ -193,22 +208,22 @@ class Downloader:
         for handler in self.logger.handlers:
             if isinstance(handler, logging.FileHandler):
                 handler.close()  # Close the file handler before deleting the file
-        os.remove(f"{self.logger.name}.log")
+        os.remove("{}.log".format(self.logger.name))
 
     def _log_init_state(self) -> None:
         """Log input arguments"""
-        self.logger.info(f"Input URL: {self.input_url}")
-        self.logger.info(f"Proxy: {self.proxy}")
-        self.logger.info(f"Threads: {self.threads}")
-        self.logger.info(f"Output dir: {self.output_dir}")
-        self.logger.info(f"Work dir: {self.work_dir}")
-        self.logger.info(f"Target stream: {self.target_stream or 'both'}")
+        self.logger.info("Input URL: {}".format(self.input_url))
+        self.logger.info("Proxy: {}".format(self.proxy))
+        self.logger.info("Threads: {}".format(self.threads))
+        self.logger.info("Output dir: {}".format(self.output_dir))
+        self.logger.info("Work dir: {}".format(self.work_dir))
+        self.logger.info("Target stream: {}".format(self.target_stream or "both"))
         if self.aggressive_segment_cleaning:
             self.logger.info("Aggressive cleanup enabled, segments will be deleted before stream muxing")
         if self.target_height is None:
             self.logger.info("Target resolution: Highest")
         elif self.target_height > 0:
-            self.logger.info(f"Target resolution: {self.target_height}")
+            self.logger.info("Target resolution: {}".format(self.target_height))
         elif self.target_height == 0:
             self.logger.info("Target resolution: Lowest")
 
@@ -216,12 +231,12 @@ class Downloader:
         """Generate output file name from movie metadata"""
         output_file_name = []
         if self.target_stream:
-            output_file_name.append(f"[{self.target_stream}]")
+            output_file_name.append("[{}]".format(self.target_stream))
         output_file_name.append(scraped_movie.studio_name)
         output_file_name.append("-")
         output_file_name.append(scraped_movie.title)
         if self.scene_n:
-            output_file_name.append(f"Scene {self.scene_n}")
+            output_file_name.append("Scene {}".format(self.scene_n))
         if self.include_performer_names:
             if self.scene_n:
                 scene = scraped_movie.scenes[self.scene_n - 1]
@@ -231,7 +246,7 @@ class Downloader:
             if performers:
                 output_file_name.append(", ".join(performers))
         if self.target_stream != "audio":
-            output_file_name.append(f"{self.manifest.video_stream.height}p")
+            output_file_name.append("{}p".format(self.manifest.video_stream.height))
         return " ".join(filter(None, output_file_name)) + ".mp4"
 
     def _cleanup(self) -> None:
@@ -247,7 +262,7 @@ class Downloader:
         self._concat_segments(
             files=stream.downloaded_segments,
             output_path=stream.path,
-            desc=f"{stream.human_name} segments",
+            desc="{} segments".format(stream.human_name),
         )
 
     def _concat_streams(self) -> None:
@@ -271,6 +286,82 @@ class Downloader:
         else:
             self._rename_stream(output_path)
 
+    def _process_split_scenes(self, scraped_movie: Movie) -> list[Path]:
+        """Process downloaded segments into separate scene files."""
+        output_paths = []
+        total_scenes = len(scraped_movie.scenes)
+        self.logger.info("Processing {} scenes as separate files".format(total_scenes))
+
+        for scene_idx, scene in enumerate(scraped_movie.scenes, 1):
+            self.logger.info("Processing scene {}/{}".format(scene_idx, total_scenes))
+
+            # Generate output name for this scene
+            output_file_name = self._generate_scene_output_name(scraped_movie, scene_idx, scene)
+            output_path = os.path.join(self.output_dir, output_file_name)
+            self.logger.info("Output file name: {}".format(output_file_name))
+
+            # Filter segments for this scene and concat
+            self._concat_scene_streams(scene)
+
+            # Mux or rename
+            if not self.target_stream:
+                self._mux_streams(output_path)
+            else:
+                self._rename_stream(output_path)
+
+            output_paths.append(Path(output_path))
+            self.logger.info("Completed scene {}/{}".format(scene_idx, total_scenes))
+
+        return output_paths
+
+    def _generate_scene_output_name(self, scraped_movie: Movie, scene_n: int, scene) -> str:
+        """Generate output file name for a specific scene."""
+        output_file_name = []
+        if self.target_stream:
+            output_file_name.append("[{}]".format(self.target_stream))
+        output_file_name.append(scraped_movie.studio_name)
+        output_file_name.append("-")
+        output_file_name.append(scraped_movie.title)
+        output_file_name.append("Scene {}".format(scene_n))
+        if self.include_performer_names and scene.performers:
+            output_file_name.append(", ".join(scene.performers))
+        if self.target_stream != "audio":
+            output_file_name.append("{}p".format(self.manifest.video_stream.height))
+        return " ".join(filter(None, output_file_name)) + ".mp4"
+
+    def _concat_scene_streams(self, scene) -> None:
+        """Concatenate stream segments for a specific scene."""
+        streams_to_concat = [stream for stream in (self.manifest.audio_stream, self.manifest.video_stream) if stream.human_name == self.target_stream or not self.target_stream]
+
+        for stream in streams_to_concat:
+            # Filter segments for this scene's range
+            scene_segments = self._filter_segments_for_scene(stream.downloaded_segments, scene)
+            if os.path.exists(stream.path):
+                os.remove(stream.path)
+            self._concat_segments(
+                files=scene_segments,
+                output_path=stream.path,
+                desc="{} scene segments".format(stream.human_name),
+            )
+
+    def _filter_segments_for_scene(self, all_segments: list[str], scene) -> list[str]:
+        """Filter downloaded segments to only include those for a specific scene."""
+        # First segment is always the init segment (e.g., "ai_123" or "vi_123")
+        init_segment = all_segments[0]
+
+        # Filter data segments by number
+        scene_segments = [init_segment]
+        for seg_path in all_segments[1:]:
+            # Extract segment number from path like "a_123_456.mp4" -> 456
+            seg_name = os.path.basename(seg_path)
+            parts = seg_name.replace(".mp4", "").split("_")
+            if len(parts) >= 3:
+                seg_num = int(parts[-1])
+                if scene.start_segment <= seg_num <= scene.end_segment:
+                    scene_segments.append(seg_path)
+
+        return scene_segments
+
     def _mux_streams(self, output_path: str) -> None:
         """Muxes audio and video streams using ffmpeg."""
         self.logger.info("Muxing streams with ffmpeg")
@@ -287,14 +378,14 @@ class Downloader:
 
     def _download_movie_covers(self, scraped_movie: Movie) -> None:
         """Downloads the movie covers."""
-        full_name = f"{scraped_movie.studio_name} - {scraped_movie.title}"
+        full_name = "{} - {}".format(scraped_movie.studio_name, scraped_movie.title)
         self._download_cover(full_name, scraped_movie.cover_url_front, front=True)
         self._download_cover(full_name, scraped_movie.cover_url_back, front=False)
 
     def _set_stream_paths(self) -> None:
         """Sets the file paths for the audio and video streams."""
         for stream in (self.manifest.audio_stream, self.manifest.video_stream):
-            stream.path = os.path.join(self.movie_work_dir, f"{stream.media_type}_{stream.stream_id}.mp4")
+            stream.path = os.path.join(self.movie_work_dir, "{}_{}.mp4".format(stream.media_type, stream.stream_id))
 
     def _create_dirs(self, movie_id: str) -> None:
         os.makedirs(self.output_dir, exist_ok=True)
@@ -329,9 +420,9 @@ class Downloader:
         """Save cover image to disk with server timestamp"""
         cover_extension = os.path.splitext(cover_url)[1]
         if front:
-            output = os.path.join(self.output_dir, f"{movie_title} front{cover_extension}")
+            output = os.path.join(self.output_dir, "{} front{}".format(movie_title, cover_extension))
         else:
-            output = os.path.join(self.output_dir, f"{movie_title} back{cover_extension}")
+            output = os.path.join(self.output_dir, "{} back{}".format(movie_title, cover_extension))
 
         if os.path.isfile(output):
             return
@@ -346,7 +437,7 @@ class Downloader:
         os.utime(output, (now, modified))
 
         if os.path.isfile(output):
-            self.logger.info(f"Saved cover: {output}")
+            self.logger.info("Saved cover: {}".format(output))
 
     def _work_folder_cleanup(self) -> None:
         if not self.keep_segments_after_download:
@@ -373,13 +464,13 @@ class Downloader:
                 scene = scraped_movie.scenes[self.scene_n - 1]
                 segment_range = (scene.start_segment, scene.end_segment)
             except IndexError as e:
-                raise IndexError(f"Scene {self.scene_n} not found!") from e
+                raise IndexError("Scene {} not found!".format(self.scene_n)) from e
         else:
             start_segment = self.start_segment or 0
             end_segment = self.end_segment or self.manifest.total_number_of_data_segments
             segment_range = (start_segment, end_segment)
 
-        self.logger.info(f"Downloading segments {segment_range[0]} - {segment_range[1]}")
+        self.logger.info("Downloading segments {} - {}".format(segment_range[0], segment_range[1]))
 
         # Determine which streams to download
         streams_to_download = []
@@ -395,7 +486,7 @@ class Downloader:
                 try:
                     future.result()
                 except Exception as e:
-                    self.logger.error(f"Failed to download {stream.human_name} stream: {str(e)}")
+                    self.logger.error("Failed to download {} stream: {}".format(stream.human_name, str(e)))
                     raise
 
     def _download_stream(self, stream: MediaStream, segment_range: tuple[int, int]) -> None:
@@ -403,9 +494,9 @@ class Downloader:
         # Initialize progress bar
         segments_to_download = range(segment_range[0], segment_range[1])
 
-        task = self.progress.add_task(f"{stream.human_name.capitalize()} download:", total=len(segments_to_download))
+        task = self.progress.add_task("{} download:".format(stream.human_name.capitalize()), total=len(segments_to_download))
 
-        self.logger.debug(f"Downloading {stream.human_name} stream ID: {stream.stream_id}")
+        self.logger.debug("Downloading {} stream ID: {}".format(stream.human_name, stream.stream_id))
 
         # Download init segment (single thread)
         self._download_segment(stream, segment_number=None)
@@ -422,18 +513,18 @@ class Downloader:
                     if self.manifest_lock.acquire(blocking=False):
                         try:
                             self.manifest.process_manifest()
-                            self.logger.debug(f"Manifest refreshed by segment {segment_num} (attempt {retries + 1})")
+                            self.logger.debug("Manifest refreshed by segment {} (attempt {})".format(segment_num, retries + 1))
                         finally:
                             self.manifest_lock.release()
 
                     else:
-                        self.logger.debug(f"Waiting for manifest refresh {segment_num}")
+                        self.logger.debug("Waiting for manifest refresh {}".format(segment_num))
                         # If lock was engaged, wait for manifest to be refreshed by another thread
                         time.sleep(1)
 
                     retries += 1
                     if retries == max_retries:
-                        self.logger.error(f"Max retries ({max_retries}) exceeded for segment {segment_num}")
+                        self.logger.error("Max retries ({}) exceeded for segment {}".format(max_retries, segment_num))
                         return None
 
         with ThreadPoolExecutor(max_workers=self.threads) as executor:
@@ -445,7 +536,7 @@ class Downloader:
                     if result is not None:
                         self.progress.update(task, advance=1)
                 except Exception as e:
-                    self.logger.error(f"Unexpected error downloading segment {futures[future]}: {str(e)}")
+                    self.logger.error("Unexpected error downloading segment {}: {}".format(futures[future], str(e)))
                     continue
 
         self.progress.update(task, visible=False)
@@ -453,14 +544,14 @@ class Downloader:
     def _download_segment(self, stream: MediaStream, segment_number: int | None = None) -> None:
         """Download and save stream segment"""
         if isinstance(segment_number, int):
-            segment_name = f"{stream.media_type}_{stream.stream_id}_{segment_number}"
+            segment_name = "{}_{}_{}".format(stream.media_type, stream.stream_id, segment_number)
         else:
-            segment_name = f"{stream.media_type}i_{stream.stream_id}"
+            segment_name = "{}i_{}".format(stream.media_type, stream.stream_id)
 
-        segment_url = f"{self.manifest.base_stream_url}/{segment_name}.mp4d"
-        segment_path = os.path.join(self.movie_work_dir, f"{segment_name}.mp4")
+        segment_url = "{}/{}.mp4d".format(self.manifest.base_stream_url, segment_name)
+        segment_path = os.path.join(self.movie_work_dir, "{}.mp4".format(segment_name))
         if os.path.exists(segment_path) and not self.overwrite_existing_files:
-            self.logger.debug(f"{segment_name} found on disk")
+            self.logger.debug("{} found on disk".format(segment_name))
             stream.downloaded_segments.append(segment_path)
             return
 
@@ -470,20 +561,20 @@ class Downloader:
             with open(segment_path, "wb") as f:
                 f.write(response.content)
             stream.downloaded_segments.append(segment_path)
-            self.logger.debug(f"{segment_name} saved to disk")
+            self.logger.debug("{} saved to disk".format(segment_name))
         elif response.status_code == 404 and segment_number == self.manifest.total_number_of_data_segments:
             # just skip if the last segment does not exist
             # segment calc returns a rounded up float which is sometimes bigger than the actual number of segments
             self.logger.debug("Last segment is 404, skipping")
         elif response.status_code == 403:
-            raise Forbidden(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
+            raise Forbidden("Segment {} Download error! Response Status : {}".format(segment_name, response.status_code))
         else:
-            raise RuntimeError(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
+            raise RuntimeError("Segment {} Download error! Response Status : {}".format(segment_name, response.status_code))
 
     def _concat_segments(self, files: list[str], output_path: str, desc: str):
         """Concat segments into a single file"""
         _files = [files[0], *sorted(files[1:], key=utils.natural_sort_key)]
-        task = self.progress.add_task(description=f"Merging {desc}", total=len(_files))
+        task = self.progress.add_task(description="Merging {}".format(desc), total=len(_files))
         with open(output_path, "wb") as f:
             for segment_file_path in _files:
                 with open(segment_file_path, "rb") as segment_file:

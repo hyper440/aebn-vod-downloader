@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import logging
 from typing import Literal
@@ -27,6 +29,7 @@ def download_movie(args):
         proxy=args.proxy,
         threads=args.threads,
         proxy_metadata_only=args.proxy_metadata,
+        split_scenes=args.split_scenes,
     ).run()
 
 
@@ -61,7 +64,7 @@ def log_error(future):
     try:
         future.result()
     except Exception as e:
-        logging.error(f"Exception occurred: {e}")
+        logging.error("Exception occurred: {}".format(e))
 
 
 def main():
@@ -106,8 +109,15 @@ def main():
         help="Set the logging level (default: INFO) Any level above INFO would also disable progress bars",
     )
     parser.add_argument("-i ", "--info", action="store_true", help="Print full movie and segment info without downloading")
+    parser.add_argument("--split-scenes", action="store_true", help="Download and save each scene as a separate file")
 
     args = parser.parse_args()
+
+    if args.split_scenes and args.scene:
+        parser.error("--split-scenes and --scene cannot be used together")
+
+    if args.split_scenes and (args.start_segment or args.end_segment):
+        parser.error("--split-scenes cannot be used with --start-segment or --end-segment")
 
     if args.info:
         dl = Downloader(
