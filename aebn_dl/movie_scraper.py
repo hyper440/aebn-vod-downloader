@@ -64,6 +64,8 @@ class Movie:
         response = self._session.get("https://m.aebn.net/movie/{}".format(self.movie_id))
         html_tree = html.fromstring(response.content)
         scene_elems = html_tree.xpath('//div[@class="scroller"]')
+        if not scene_elems:
+            raise RuntimeError("Failed to scrape scene data")
         for i, scene_el in enumerate(scene_elems):
             target_scene = self.scenes[i]
             target_scene.start_timing = int(scene_el.get("data-time-start"))
