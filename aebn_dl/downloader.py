@@ -4,7 +4,6 @@ import datetime
 import email.utils as eut
 import logging
 import os
-import signal
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
@@ -29,9 +28,6 @@ from .exceptions import Forbidden
 from .manifest_parser import Manifest
 from .models import MediaStream
 from .movie_scraper import Movie
-
-# Make Ctrl-C work when threads are running
-signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
 class Downloader:
