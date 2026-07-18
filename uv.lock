@@ -8,7 +8,7 @@ resolution-markers = [
 
 [[package]]
 name = "aebndl"
-version = "0.8.0"
+version = "0.10.0"
 source = { editable = "." }
 dependencies = [
     { name = "curl-cffi", version = "0.9.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
@@ -130,8 +130,8 @@ resolution-markers = [
     "python_full_version < '3.9'",
 ]
 dependencies = [
-    { name = "certifi", marker = "python_full_version < '3.9'" },
-    { name = "cffi", marker = "python_full_version < '3.9'" },
+    { name = "certifi" },
+    { name = "cffi" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9f/7d/c326faf5a772a11011dcc30aca5b64c197bcf59fdd9b90bf28b700d6d682/curl_cffi-0.9.0.tar.gz", hash = "sha256:4818e074b61cb209bd8d4d0d03783313d4773e6b51f8b815e25aad9cc146a7b7", size = 144117, upload-time = "2025-02-15T11:48:30.643Z" }
 wheels = [
@@ -154,8 +154,8 @@ resolution-markers = [
     "python_full_version >= '3.9'",
 ]
 dependencies = [
-    { name = "certifi", marker = "python_full_version >= '3.9'" },
-    { name = "cffi", marker = "python_full_version >= '3.9'" },
+    { name = "certifi" },
+    { name = "cffi" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/74/c9/014d52df55ccb1d21645aee6f104fe1031c575eb64ffe4392419b4c7da49/curl_cffi-0.11.3.tar.gz", hash = "sha256:0b21f39980bce3fb5aeea8d64d76bd465825c54a45e2933ca4df5ec0f041ba49", size = 149152, upload-time = "2025-06-09T03:06:43.321Z" }
 wheels = [

@@ -4,7 +4,6 @@ import datetime
 import email.utils as eut
 import logging
 import os
-import signal
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import nullcontext
@@ -29,9 +28,6 @@ from .exceptions import Forbidden
 from .manifest_parser import Manifest
 from .models import MediaStream
 from .movie_scraper import Movie
-
-# Make Ctrl-C work when threads are running
-signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 
 class Downloader:
@@ -131,7 +127,9 @@ class Downloader:
         with context:
             self._initialize_download()
             scraped_movie = self._scrape_movie_info()
-            self._process_manifest(scraped_movie)
+            should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
+            requires_scene_boundaries = bool(self.scene_n or self.split_scenes or should_embed_metadata)
+            self._process_manifest(scraped_movie, requires_scene_boundaries)
             self._create_dirs(scraped_movie.movie_id)
             self._set_stream_paths()
             if self.download_covers:
@@ -151,7 +149,6 @@ class Downloader:
                 output_path = os.path.join(self.output_dir, output_file_name)
                 self.logger.info(f"Output file name: {output_file_name}")
                 self._process_streams(output_path)
-                should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
                 if should_embed_metadata:
                     self.logger.info("Embedding metadata")
                     utils.embed_metadata(output_path, scraped_movie)
@@ -163,7 +160,7 @@ class Downloader:
         """Print detailed movie info and scene segment boundaries."""
         self._initialize_download()
         movie = self._scrape_movie_info()
-        self._process_manifest(movie)
+        self._process_manifest(movie, requires_scene_boundaries=True)
 
         print(f"\n{movie.studio_name} - {movie.title}")
         print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
@@ -213,13 +210,17 @@ class Downloader:
     def _log_init_state(self) -> None:
         """Log input arguments"""
         self.logger.info(f"Input URL: {self.input_url}")
-        self.logger.info(f"Proxy: {self.proxy}")
+        proxy_state = "configured" if self.proxy else "disabled"
+        self.logger.info(f"Proxy: {proxy_state}")
         self.logger.info(f"Threads: {self.threads}")
         self.logger.info(f"Output dir: {self.output_dir}")
         self.logger.info(f"Work dir: {self.work_dir}")
         self.logger.info("Target stream: {}".format(self.target_stream or "both"))
         if self.aggressive_segment_cleaning:
-            self.logger.info("Aggressive cleanup enabled, segments will be deleted before stream muxing")
+            if self.split_scenes:
+                self.logger.info("Aggressive cleanup enabled; segment deletion is deferred until all scenes complete")
+            else:
+                self.logger.info("Aggressive cleanup enabled, segments will be deleted before stream muxing")
         if self.target_height is None:
             self.logger.info("Target resolution: Highest")
         elif self.target_height > 0:
@@ -342,6 +343,7 @@ class Downloader:
                 files=scene_segments,
                 output_path=stream.path,
                 desc=f"{stream.human_name} scene segments",
+                delete_source_files=False,
             )
 
     def _filter_segments_for_scene(self, all_segments: list[str], scene) -> list[str]:
@@ -392,7 +394,7 @@ class Downloader:
         self.movie_work_dir = os.path.join(self.work_dir, movie_id)
         os.makedirs(self.movie_work_dir, exist_ok=True)
 
-    def _process_manifest(self, scraped_movie: Movie) -> None:
+    def _process_manifest(self, scraped_movie: Movie, requires_scene_boundaries: bool) -> None:
         """Processes the movie manifest."""
         self.logger.info("Processing manifest")
         self.manifest = Manifest(
@@ -403,7 +405,8 @@ class Downloader:
             force_resolution=self.force_resolution,
         )
         self.manifest.process_manifest()
-        scraped_movie.calculate_scenes_boundaries(self.manifest.segment_duration)
+        if requires_scene_boundaries:
+            scraped_movie.calculate_scenes_boundaries(self.manifest.segment_duration)
 
     def _scrape_movie_info(self) -> Movie:
         """Scrapes movie information from the input URL."""
@@ -570,8 +573,10 @@ class Downloader:
         else:
             raise RuntimeError(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
 
-    def _concat_segments(self, files: list[str], output_path: str, desc: str):
+    def _concat_segments(self, files: list[str], output_path: str, desc: str, delete_source_files: bool | None = None):
         """Concat segments into a single file"""
+        if delete_source_files is None:
+            delete_source_files = self.aggressive_segment_cleaning
         _files = [files[0], *sorted(files[1:], key=utils.natural_sort_key)]
         task = self.progress.add_task(description=f"Merging {desc}", total=len(_files))
         with open(output_path, "wb") as f:
@@ -581,6 +586,6 @@ class Downloader:
                     segment_file.close()
                     f.write(content)
                     self.progress.update(task, advance=1)
-                if self.aggressive_segment_cleaning:
+                if delete_source_files:
                     os.remove(segment_file_path)
         self.progress.update(task, visible=False)
