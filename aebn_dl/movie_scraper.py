@@ -74,6 +74,8 @@ class Movie:
         scene_elems = html_tree.xpath('//div[@class="scroller"]')
         if not scene_elems:
             raise RuntimeError("Failed to scrape scene data")
+        if len(scene_elems) != len(self.scenes):
+            raise RuntimeError(f"Scene count mismatch: mobile={len(scene_elems)}, movie={len(self.scenes)}")
         for i, scene_el in enumerate(scene_elems):
             target_scene = self.scenes[i]
             target_scene.start_timing = int(scene_el.get("data-time-start"))

@@ -131,7 +131,9 @@ class Downloader:
         with context:
             self._initialize_download()
             scraped_movie = self._scrape_movie_info()
-            self._process_manifest(scraped_movie)
+            should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
+            requires_scene_boundaries = bool(self.scene_n or self.split_scenes or should_embed_metadata)
+            self._process_manifest(scraped_movie, requires_scene_boundaries)
             self._create_dirs(scraped_movie.movie_id)
             self._set_stream_paths()
             if self.download_covers:
@@ -151,7 +153,6 @@ class Downloader:
                 output_path = os.path.join(self.output_dir, output_file_name)
                 self.logger.info(f"Output file name: {output_file_name}")
                 self._process_streams(output_path)
-                should_embed_metadata = not any((self.no_metadata, self.scene_n, self.start_segment, self.end_segment))
                 if should_embed_metadata:
                     self.logger.info("Embedding metadata")
                     utils.embed_metadata(output_path, scraped_movie)
@@ -163,7 +164,7 @@ class Downloader:
         """Print detailed movie info and scene segment boundaries."""
         self._initialize_download()
         movie = self._scrape_movie_info()
-        self._process_manifest(movie)
+        self._process_manifest(movie, requires_scene_boundaries=True)
 
         print(f"\n{movie.studio_name} - {movie.title}")
         print(f"Duration: {movie.total_duration_seconds // 60} min ({movie.total_duration_seconds}s)")
@@ -393,7 +394,7 @@ class Downloader:
         self.movie_work_dir = os.path.join(self.work_dir, movie_id)
         os.makedirs(self.movie_work_dir, exist_ok=True)
 
-    def _process_manifest(self, scraped_movie: Movie) -> None:
+    def _process_manifest(self, scraped_movie: Movie, requires_scene_boundaries: bool) -> None:
         """Processes the movie manifest."""
         self.logger.info("Processing manifest")
         self.manifest = Manifest(
@@ -404,7 +405,8 @@ class Downloader:
             force_resolution=self.force_resolution,
         )
         self.manifest.process_manifest()
-        scraped_movie.calculate_scenes_boundaries(self.manifest.segment_duration)
+        if requires_scene_boundaries:
+            scraped_movie.calculate_scenes_boundaries(self.manifest.segment_duration)
 
     def _scrape_movie_info(self) -> Movie:
         """Scrapes movie information from the input URL."""
