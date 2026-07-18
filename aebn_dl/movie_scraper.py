@@ -61,7 +61,7 @@ class Movie:
 
     def calculate_scenes_boundaries(self, segment_duration: float):
         """Calculate scene segment boundaries with data from m.aebn.net"""
-        response = self._session.get("https://m.aebn.net/movie/{}".format(self.movie_id))
+        response = self._session.get(f"https://m.aebn.net/movie/{self.movie_id}")
         html_tree = html.fromstring(response.content)
         scene_elems = html_tree.xpath('//div[@class="scroller"]')
         if not scene_elems:

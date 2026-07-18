@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import logging
-import subprocess
-import shutil
-from pathlib import Path
 import os
 import re
+import shutil
+import subprocess
 import sys
-
-from .movie_scraper import Movie
+from pathlib import Path
 
 from .exceptions import FFmpegError
+from .movie_scraper import Movie
 
 
 def remove_chars(text: str) -> str:
@@ -36,7 +35,7 @@ def new_logger(name: str, log_level: str) -> logging.Logger:
     logger.addHandler(console_handler)
 
     # File handler with DEBUG level
-    file_handler = logging.FileHandler("{}.log".format(name))
+    file_handler = logging.FileHandler(f"{name}.log")
     file_handler.setLevel(logging.DEBUG)
     file_handler.set_name("file_handler")
     file_handler.setFormatter(formatter)
@@ -68,7 +67,7 @@ def duration_to_seconds(duration: str) -> int:
 
 def ffmpeg_mux_streams(stream_path_1: str, stream_path_2: str, output_path: str) -> None:
     """Mux two media streams with ffmpeg"""
-    cmd = 'ffmpeg -i "{}" -i "{}" -y -c copy "{}"  -loglevel warning'.format(stream_path_1, stream_path_2, output_path)
+    cmd = f'ffmpeg -i "{stream_path_1}" -i "{stream_path_2}" -y -c copy "{output_path}"  -loglevel warning'
 
     out = subprocess.run(cmd, shell=True, capture_output=True, text=True, check=False)
 
@@ -91,9 +90,7 @@ def is_valid_media(media_bytes: bytes) -> bool:
     _, stderr_data = process.communicate(input=media_bytes)
 
     # Check if FFmpeg found any errors
-    if b"Multiple frames in a packet" in stderr_data or b"Error" in stderr_data:
-        return False  # Not Valid
-    return True  # Valid
+    return b"Multiple frames in a packet" not in stderr_data and b"Error" not in stderr_data
 
 
 def ffmpeg_check() -> None:
@@ -116,7 +113,7 @@ def embed_metadata(input_path: str | Path, movie: Movie) -> None:
 
     # Build metadata content
     metadata_content = ";FFMETADATA1\n\n"
-    metadata_content += "title={}\n\n".format(movie.title)
+    metadata_content += f"title={movie.title}\n\n"
     for i, scene in enumerate(movie.scenes):
         # Convert timing to milliseconds
         start_time_ms = scene.start_timing * 1000
@@ -126,7 +123,7 @@ def embed_metadata(input_path: str | Path, movie: Movie) -> None:
         metadata_content += "[CHAPTER]\nTIMEBASE=1/1000\nSTART={}\nEND={}\ntitle=Scene {}: {}\n\n".format(start_time_ms, end_time_ms, i + 1, ", ".join(scene.performers))
 
     # Create temporary output path (replaces Path.with_stem which requires Python 3.9+)
-    temp_output = input_path.with_name("{}_temp_chaptered{}".format(input_path.stem, input_path.suffix))
+    temp_output = input_path.with_name(f"{input_path.stem}_temp_chaptered{input_path.suffix}")
 
     try:
         # Run ffmpeg with metadata piped via stdin

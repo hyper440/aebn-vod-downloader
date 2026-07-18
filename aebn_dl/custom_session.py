@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+from contextlib import suppress
 from time import sleep
 from typing import Literal
 
@@ -17,10 +18,8 @@ try:
 except ImportError:
     from curl_cffi import CurlError as RequestsError
 
-try:
+with suppress(ImportError):
     from curl_cffi.requests.session import RequestParams
-except ImportError:
-    pass
 
 from .exceptions import NetworkError
 

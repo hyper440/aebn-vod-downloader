@@ -64,7 +64,7 @@ def log_error(future):
     try:
         future.result()
     except Exception as e:
-        logging.error("Exception occurred: {}".format(e))
+        logging.error(f"Exception occurred: {e}")
 
 
 def main():

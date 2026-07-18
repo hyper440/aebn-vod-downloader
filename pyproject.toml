@@ -26,4 +26,26 @@ aebndl = "aebn_dl.cli:main"
 
 
 [tool.ruff]
+extend-exclude = ["colab.ipynb"]
 line-length = 200
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "B",    # flake8-bugbear
+    "C4",   # flake8-comprehensions
+    "E4",   # pycodestyle imports
+    "E7",   # pycodestyle statements
+    "E9",   # pycodestyle runtime errors
+    "E501", # line length
+    "F",    # Pyflakes
+    "I",    # isort
+    "PIE",  # flake8-pie
+    "RUF",  # Ruff-specific rules
+    "SIM",  # flake8-simplify
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+ignore = [
+    "SIM108", # Prefer readable if/else blocks over forced ternaries.
+]
