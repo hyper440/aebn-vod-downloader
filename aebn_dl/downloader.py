@@ -213,7 +213,8 @@ class Downloader:
     def _log_init_state(self) -> None:
         """Log input arguments"""
         self.logger.info(f"Input URL: {self.input_url}")
-        self.logger.info(f"Proxy: {self.proxy}")
+        proxy_state = "configured" if self.proxy else "disabled"
+        self.logger.info(f"Proxy: {proxy_state}")
         self.logger.info(f"Threads: {self.threads}")
         self.logger.info(f"Output dir: {self.output_dir}")
         self.logger.info(f"Work dir: {self.work_dir}")
