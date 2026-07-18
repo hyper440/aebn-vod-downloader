@@ -23,6 +23,14 @@ class Movie:
         self.cover_url_front: str | None = None
         self.cover_url_back: str | None = None
         self.scenes_boundaries = []
+        for sex_pref_subdomain in ("straight", "gay"):
+            self._session.cookies.set(
+                name="ageGated",
+                value="true",
+                domain=f"{sex_pref_subdomain}.aebn.com",
+                path="/",
+                secure=True,
+            )
         self._scrape_info()
 
     def _scrape_info(self):
