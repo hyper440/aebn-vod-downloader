@@ -221,7 +221,10 @@ class Downloader:
         self.logger.info(f"Work dir: {self.work_dir}")
         self.logger.info("Target stream: {}".format(self.target_stream or "both"))
         if self.aggressive_segment_cleaning:
-            self.logger.info("Aggressive cleanup enabled, segments will be deleted before stream muxing")
+            if self.split_scenes:
+                self.logger.info("Aggressive cleanup enabled; segment deletion is deferred until all scenes complete")
+            else:
+                self.logger.info("Aggressive cleanup enabled, segments will be deleted before stream muxing")
         if self.target_height is None:
             self.logger.info("Target resolution: Highest")
         elif self.target_height > 0:
@@ -344,6 +347,7 @@ class Downloader:
                 files=scene_segments,
                 output_path=stream.path,
                 desc=f"{stream.human_name} scene segments",
+                delete_source_files=False,
             )
 
     def _filter_segments_for_scene(self, all_segments: list[str], scene) -> list[str]:
@@ -573,8 +577,10 @@ class Downloader:
         else:
             raise RuntimeError(f"Segment {segment_name} Download error! Response Status : {response.status_code}")
 
-    def _concat_segments(self, files: list[str], output_path: str, desc: str):
+    def _concat_segments(self, files: list[str], output_path: str, desc: str, delete_source_files: bool | None = None):
         """Concat segments into a single file"""
+        if delete_source_files is None:
+            delete_source_files = self.aggressive_segment_cleaning
         _files = [files[0], *sorted(files[1:], key=utils.natural_sort_key)]
         task = self.progress.add_task(description=f"Merging {desc}", total=len(_files))
         with open(output_path, "wb") as f:
@@ -584,6 +590,6 @@ class Downloader:
                     segment_file.close()
                     f.write(content)
                     self.progress.update(task, advance=1)
-                if self.aggressive_segment_cleaning:
+                if delete_source_files:
                     os.remove(segment_file_path)
         self.progress.update(task, visible=False)
