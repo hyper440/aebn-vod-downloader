@@ -23,11 +23,11 @@ class Movie:
         self.cover_url_front: str | None = None
         self.cover_url_back: str | None = None
         self.scenes_boundaries = []
-        for sex_pref_subdomain in ("straight", "gay"):
+        for cookie_domain in ("straight.aebn.com", "gay.aebn.com", "m.aebn.net", "vod.aebn.com"):
             self._session.cookies.set(
                 name="ageGated",
                 value="true",
-                domain=f"{sex_pref_subdomain}.aebn.com",
+                domain=cookie_domain,
                 path="/",
                 secure=True,
             )
