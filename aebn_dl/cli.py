@@ -90,7 +90,8 @@ def main():
     parser.add_argument("-p", "--proxy", type=str, help="Proxy to use (format: protocol://username:password@ip:port)")
     parser.add_argument("-pm", "--proxy-metadata", action="store_true", help="Use proxies for metadata only, and not for downloading")
     parser.add_argument("-c", "--covers", action="store_true", help="Download front and back covers")
-    parser.add_argument("-ow", "--overwrite", action="store_true", help="Overwrite existing audio and video segments, if already present")
+    parser.add_argument("--covers-only", action="store_true", help="Download only the front and back covers, skipping the movie")
+    parser.add_argument("-ow", "--overwrite", action="store_true", help="Overwrite existing audio and video segments and covers, if already present")
     parser.add_argument("-ts", "--target-stream", choices=["audio", "video"], help="Download just video or just audio stream")
     parser.add_argument("-ks", "--keep-segments", action="store_true", help="Keep audio and video segments after downloading")
     parser.add_argument("-kl", "--keep-logs", action="store_true", help="Keep logs after successful exit")
@@ -132,6 +133,19 @@ def main():
             show_progress=False,
         )
         dl.print_info()
+        return
+
+    if args.covers_only:
+        Downloader(
+            url=args.url,
+            output_dir=args.output_dir,
+            proxy=args.proxy,
+            proxy_metadata_only=args.proxy_metadata,
+            overwrite_existing_files=args.overwrite,
+            log_level=args.log_level,
+            keep_logs=args.keep_logs,
+            show_progress=False,
+        ).download_covers_only()
         return
 
     download_movie(args)
