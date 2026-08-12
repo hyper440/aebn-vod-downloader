@@ -156,6 +156,16 @@ class Downloader:
                 self._cleanup()
                 return Path(output_path)
 
+    def download_covers_only(self) -> None:
+        """Download only the front and back covers, skipping the movie."""
+        self._log_init_state()
+        self._init_new_session()
+        scraped_movie = self._scrape_movie_info()
+        os.makedirs(self.output_dir, exist_ok=True)
+        self._download_movie_covers(scraped_movie)
+        if not self.keep_logs:
+            self._delete_log()
+
     def print_info(self):
         """Print detailed movie info and scene segment boundaries."""
         self._initialize_download()
@@ -427,7 +437,7 @@ class Downloader:
         else:
             output = os.path.join(self.output_dir, f"{movie_title} back{cover_extension}")
 
-        if os.path.isfile(output):
+        if os.path.isfile(output) and not self.overwrite_existing_files:
             return
 
         # Save file from http with server timestamp https://stackoverflow.com/a/58814151/3663357
