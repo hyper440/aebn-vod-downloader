@@ -58,8 +58,11 @@ class Movie:
             self.scenes.append(scene)
         cover_front = content.xpath('//*[@class="dts-movie-boxcover-front"]//img/@src')[0].strip()
         self.cover_url_front = "https:" + cover_front.split("?")[0]
-        cover_back = content.xpath('//img[@class="dts-modal-boxcover-back"]/@src')[0].strip()
-        self.cover_url_back = "https:" + cover_back.split("?")[0]
+        try:
+            cover_back = content.xpath('//img[@class="dts-modal-boxcover-back"]/@src')[0].strip()
+            self.cover_url_back = "https:" + cover_back.split("?")[0]
+        except IndexError:
+            self.cover_url_back = None
 
     def _extract_studio_name(self, content) -> str:
         studio_names = content.xpath('//*[@class="section-detail-list-item-studio"]/a/text()')

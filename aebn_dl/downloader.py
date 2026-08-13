@@ -392,7 +392,10 @@ class Downloader:
         """Downloads the movie covers."""
         full_name = f"{scraped_movie.studio_name} - {scraped_movie.title}"
         self._download_cover(full_name, scraped_movie.cover_url_front, front=True)
-        self._download_cover(full_name, scraped_movie.cover_url_back, front=False)
+        if scraped_movie.cover_url_back:
+            self._download_cover(full_name, scraped_movie.cover_url_back, front=False)
+        else:
+            self.logger.info("No back cover found, skipping")
 
     def _set_stream_paths(self) -> None:
         """Sets the file paths for the audio and video streams."""
